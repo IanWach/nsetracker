@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NSE Momentum Strategy Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['IBM Plex Mono', 'monospace'],
+          },
+          colors: {
+            navy: {
+              950: '#050c1a',
+              900: '#080f1e',
+              800: '#0d1629',
+              700: '#111e35',
+              600: '#162442',
+            },
+            accent: {
+              green:  '#00e5a0',
+              yellow: '#f5c842',
+              red:    '#ff4d6d',
+              blue:   '#38bdf8',
+            }
+          },
+          boxShadow: {
+            'glow-green':  '0 0 18px -2px rgba(0,229,160,0.25)',
+            'glow-yellow': '0 0 18px -2px rgba(245,200,66,0.25)',
+            'glow-red':    '0 0 18px -2px rgba(255,77,109,0.25)',
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    /* ─── Base ─────────────────────────────────────────────── */
+    body { background-color: #050c1a; font-family: 'Inter', sans-serif; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #080f1e; }
+    ::-webkit-scrollbar-thumb { background: #1e3460; border-radius: 3px; }
+
+    /* ─── Ticker tape ───────────────────────────────────────── */
+    .ticker-wrap { overflow: hidden; white-space: nowrap; }
+    .ticker-inner { display: inline-block; animation: tickerScroll 40s linear infinite; }
+    @keyframes tickerScroll { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+
+    /* ─── Table hover ───────────────────────────────────────── */
+    .stock-row { transition: background 0.15s; }
+    .stock-row:hover { background: rgba(56,189,248,0.04); }
+
+    /* ─── Badge ─────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem; font-weight: 600;
+      letter-spacing: 0.04em; padding: 3px 9px;
+      border-radius: 4px; border-width: 1px;
+      text-transform: uppercase; white-space: nowrap;
+    }
+    .badge-watch   { color:#64748b; border-color:#1e3460; background:rgba(30,52,96,0.3); }
+    .badge-buy     { color:#00e5a0; border-color:#00e5a0; background:rgba(0,229,160,0.08); box-shadow:0 0 12px -3px rgba(0,229,160,0.3); }
+    .badge-momentum{ color:#f5c842; border-color:#f5c842; background:rgba(245,200,66,0.08); box-shadow:0 0 12px -3px rgba(245,200,66,0.3); }
+    .badge-exit    { color:#ff4d6d; border-color:#ff4d6d; background:rgba(255,77,109,0.08); box-shadow:0 0 12px -3px rgba(255,77,109,0.3); }
+
+    /* ─── Price pill ────────────────────────────────────────── */
+    .price-pill { font-family:'IBM Plex Mono',monospace; font-size:0.8rem; }
+    .price-up   { color:#00e5a0; }
+    .price-down { color:#ff4d6d; }
+    .price-flat { color:#64748b; }
+
+    /* ─── Progress bar ──────────────────────────────────────── */
+    .progress-track { background:#0d1629; border-radius:99px; height:5px; }
+    .progress-fill  { height:5px; border-radius:99px; transition:width 0.6s ease; }
+
+    /* ─── Calculator card ───────────────────────────────────── */
+    .calc-input {
+      background: #0d1629; border: 1px solid #1e3460;
+      color: #e2e8f0; border-radius: 6px;
+      padding: 8px 12px; font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.85rem; transition: border-color 0.2s;
+      width: 100%;
+    }
+    .calc-input:focus { outline:none; border-color:#38bdf8; }
+    .calc-input::placeholder { color:#334155; }
+
+    /* ─── Grid lines ────────────────────────────────────────── */
+    .grid-line { border-color: #0d1629; }
+
+    /* ─── Stat card ─────────────────────────────────────────── */
+    .stat-card {
+      background: linear-gradient(135deg, #0d1629 0%, #080f1e 100%);
+      border: 1px solid #1e3460; border-radius: 10px;
+    }
+
+    /* ─── Section divider ───────────────────────────────────── */
+    .section-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem; letter-spacing: 0.12em;
+      color: #38bdf8; text-transform: uppercase;
+    }
+
+    /* ─── Pulse dot ─────────────────────────────────────────── */
+    @keyframes pulseRing { 0%{transform:scale(1);opacity:1} 100%{transform:scale(2.2);opacity:0} }
+    .pulse-dot { position:relative; width:8px; height:8px; }
+    .pulse-dot span {
+      position:absolute; inset:0; border-radius:50%; background:#00e5a0;
+    }
+    .pulse-dot span:first-child {
+      animation: pulseRing 1.5s ease-out infinite;
+    }
+
+    /* ─── Table scroll wrapper ──────────────────────────────── */
+    .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+    /* ─── Swap arrow animation ──────────────────────────────── */
+    @keyframes arrowBounce { 0%,100%{transform:translateX(0)} 50%{transform:translateX(5px)} }
+    .arrow-anim { animation: arrowBounce 1.4s ease-in-out infinite; }
+
+    /* ─── Toast ─────────────────────────────────────────────── */
+    #toast {
+      position:fixed; bottom:24px; right:24px; z-index:999;
+      background:#0d1629; border:1px solid #1e3460;
+      color:#94a3b8; font-size:0.78rem; padding:10px 16px;
+      border-radius:8px; font-family:'IBM Plex Mono',monospace;
+      transition: opacity 0.4s; opacity:0; pointer-events:none;
+    }
+    #toast.show { opacity:1; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-200">
+
+<!-- ════════════════════════════════════════════════════════════
+     TICKER TAPE
+════════════════════════════════════════════════════════════ -->
+<div class="ticker-wrap py-1.5" style="background:#0d1629;border-bottom:1px solid #1e3460;">
+  <div class="ticker-inner text-xs font-mono text-slate-500" id="tickerContent">
+    <!-- filled by JS -->
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     HEADER
+════════════════════════════════════════════════════════════ -->
+<header class="px-6 pt-8 pb-6 max-w-7xl mx-auto">
+  <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+    <div>
+      <div class="section-label mb-2">Nairobi Securities Exchange · Dividend Cycle Strategy</div>
+      <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-slate-100 leading-none">
+        NSE Momentum<br class="sm:hidden" /> <span class="text-transparent bg-clip-text" style="background-image:linear-gradient(90deg,#38bdf8,#00e5a0)">Strategy Tracker</span>
+      </h1>
+      <p class="mt-2 text-sm text-slate-500 max-w-md">Accumulate before announcements. Ride momentum to AGM. Exit on dividend exhaust.</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="pulse-dot"><span></span><span></span></div>
+      <span class="text-xs font-mono text-slate-500" id="lastUpdated">Fetching prices…</span>
+      <button onclick="fetchAllPrices()" class="text-xs font-mono px-3 py-1.5 rounded border border-slate-700 text-slate-400 hover:border-accent-blue hover:text-sky-400 transition-colors">↻ Refresh</button>
+    </div>
+  </div>
+
+  <!-- Stat strip -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
+    <div class="stat-card p-4">
+      <div class="text-xs text-slate-500 font-mono mb-1">POSITIONS</div>
+      <div class="text-2xl font-bold text-slate-100" id="statTotal">8</div>
+      <div class="text-xs text-slate-600 mt-0.5">tracked counters</div>
+    </div>
+    <div class="stat-card p-4">
+      <div class="text-xs text-slate-500 font-mono mb-1">BUY ZONE</div>
+      <div class="text-2xl font-bold text-accent-green" id="statBuy">—</div>
+      <div class="text-xs text-slate-600 mt-0.5">accumulation signals</div>
+    </div>
+    <div class="stat-card p-4">
+      <div class="text-xs text-slate-500 font-mono mb-1">IN MOMENTUM</div>
+      <div class="text-2xl font-bold text-accent-yellow" id="statMomentum">—</div>
+      <div class="text-xs text-slate-600 mt-0.5">running counters</div>
+    </div>
+    <div class="stat-card p-4">
+      <div class="text-xs text-slate-500 font-mono mb-1">EXIT SIGNAL</div>
+      <div class="text-2xl font-bold text-accent-red" id="statExit">—</div>
+      <div class="text-xs text-slate-600 mt-0.5">near exit window</div>
+    </div>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════════════════════════
+     MAIN TABLE
+════════════════════════════════════════════════════════════ -->
+<main class="px-6 pb-12 max-w-7xl mx-auto space-y-10">
+
+  <section>
+    <div class="flex items-center justify-between mb-3">
+      <div class="section-label">Strategy Table — Chronological</div>
+      <div class="text-xs font-mono text-slate-600" id="currentDateLabel"></div>
+    </div>
+
+    <div class="table-scroll rounded-xl border border-slate-800" style="background:#080f1e;">
+      <table class="w-full min-w-[860px] text-sm border-collapse">
+        <thead>
+          <tr style="border-bottom:1px solid #1e3460;">
+            <th class="text-left px-4 py-3 text-xs font-mono text-slate-500 uppercase tracking-widest font-normal">Counter</th>
+            <th class="text-left px-4 py-3 text-xs font-mono text-slate-500 uppercase tracking-widest font-normal">Ticker</th>
+            <th class="text-right px-4 py-3 text-xs font-mono text-slate-500 uppercase tracking-widest font-normal">Floor Range</th>
+            <th class="text-right px-4 py-3 text-xs font-mono text-slate-500 uppercase tracking-widest font-normal">Current</th>
+            <th class="text-right px-4 py-3 text-xs font-mono text-slate-500 uppercase tracking-widest font-normal">Target</th>
+            <th class="text-right px-4 py-3 text-xs font-mono text-slate-500 uppercase tracking-widest font-normal">Upside</th>
+            <th class="text-left px-4 py-3 text-xs font-mono text-slate-500 uppercase tracking-widest font-normal">Announcement</th>
+            <th class="text-left px-4 py-3 text-xs font-mono text-slate-500 uppercase tracking-widest font-normal">AGM</th>
+            <th class="text-left px-4 py-3 text-xs font-mono text-slate-500 uppercase tracking-widest font-normal">Status</th>
+          </tr>
+        </thead>
+        <tbody id="stockTableBody">
+          <!-- filled by JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Legend -->
+    <div class="flex flex-wrap gap-4 mt-3 text-xs font-mono text-slate-600">
+      <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-accent-green inline-block"></span> BUY ACCUMULATION – in target month window</span>
+      <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-accent-yellow inline-block"></span> MOMENTUM RUN – post-announcement, pre-AGM</span>
+      <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-accent-red inline-block"></span> EXIT SIGNAL – near or past AGM</span>
+      <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-700 inline-block"></span> WATCH – outside cycle window</span>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════
+       SWAP CALCULATOR
+  ══════════════════════════════════════════════════════════ -->
+  <section>
+    <div class="section-label mb-3">Swap Calculator — With 4.2% Round-Trip Friction</div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <!-- Left: Sell side -->
+      <div class="stat-card p-6 space-y-4">
+        <div class="text-xs font-mono text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+          <span class="text-accent-red">◆</span> SELL
+        </div>
+
+        <div>
+          <label class="text-xs text-slate-500 mb-1 block">Stock to Sell</label>
+          <select id="sellStock" class="calc-input" onchange="runCalculator()">
+            <!-- options filled by JS -->
+          </select>
+        </div>
+
+        <div>
+          <label class="text-xs text-slate-500 mb-1 block">Number of Shares</label>
+          <input id="sellQty" type="number" class="calc-input" placeholder="e.g. 500" value="500" oninput="runCalculator()" />
+        </div>
+
+        <div>
+          <label class="text-xs text-slate-500 mb-1 block">Sell Price (KES)</label>
+          <input id="sellPrice" type="number" class="calc-input" placeholder="e.g. 65.00" oninput="runCalculator()" />
+          <div class="text-xs text-slate-600 mt-1 font-mono" id="sellPriceHint"></div>
+        </div>
+
+        <div class="pt-2 border-t border-slate-800">
+          <div class="flex justify-between text-xs text-slate-500 mb-1">
+            <span>Gross Proceeds</span>
+            <span class="font-mono text-slate-300" id="calcGross">—</span>
+          </div>
+          <div class="flex justify-between text-xs text-slate-500 mb-1">
+            <span>Friction (4.2%)</span>
+            <span class="font-mono text-accent-red" id="calcFriction">—</span>
+          </div>
+          <div class="flex justify-between text-sm font-semibold mt-2">
+            <span class="text-slate-300">Net Capital Available</span>
+            <span class="font-mono text-accent-green" id="calcNet">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Buy side -->
+      <div class="stat-card p-6 space-y-4">
+        <div class="text-xs font-mono text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+          <span class="text-accent-green">◆</span> BUY
+        </div>
+
+        <div>
+          <label class="text-xs text-slate-500 mb-1 block">Stock to Buy</label>
+          <select id="buyStock" class="calc-input" onchange="runCalculator()">
+            <!-- options filled by JS -->
+          </select>
+        </div>
+
+        <div>
+          <label class="text-xs text-slate-500 mb-1 block">Buy Price (KES)</label>
+          <input id="buyPrice" type="number" class="calc-input" placeholder="e.g. 13.50" oninput="runCalculator()" />
+          <div class="text-xs text-slate-600 mt-1 font-mono" id="buyPriceHint"></div>
+        </div>
+
+        <!-- Result -->
+        <div class="rounded-lg p-4 mt-2" style="background:#0a1428;border:1px solid #1e3460;">
+          <div class="text-xs text-slate-500 mb-3 font-mono">SWAP RESULT</div>
+
+          <div class="flex items-end gap-3 mb-3">
+            <div class="text-4xl font-bold text-slate-100" id="calcShares">—</div>
+            <div class="text-sm text-slate-500 mb-1" id="calcSharesLabel">shares</div>
+          </div>
+
+          <div class="progress-track mb-2">
+            <div class="progress-fill" id="calcProgress" style="width:0%;background:linear-gradient(90deg,#38bdf8,#00e5a0);"></div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 mt-3 text-xs">
+            <div>
+              <div class="text-slate-600 mb-0.5">Cost at Buy Price</div>
+              <div class="font-mono text-slate-300" id="calcCost">—</div>
+            </div>
+            <div>
+              <div class="text-slate-600 mb-0.5">Target Value</div>
+              <div class="font-mono text-accent-green" id="calcTargetVal">—</div>
+            </div>
+            <div>
+              <div class="text-slate-600 mb-0.5">Change</div>
+              <div class="font-mono" id="calcGainPct">—</div>
+            </div>
+            <div>
+              <div class="text-slate-600 mb-0.5">Projected Gain</div>
+              <div class="font-mono text-accent-green" id="calcGain">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════
+       STRATEGY NOTES
+  ══════════════════════════════════════════════════════════ -->
+  <section>
+    <div class="section-label mb-3">Strategy Notes</div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs text-slate-500 font-mono">
+      <div class="stat-card p-4">
+        <div class="text-accent-green mb-2 font-semibold">PHASE 1 — ACCUMULATE</div>
+        Buy within the floor range when the counter enters the pre-announcement window. Price anchors tend to be strong here as institutions quietly position.
+      </div>
+      <div class="stat-card p-4">
+        <div class="text-accent-yellow mb-2 font-semibold">PHASE 2 — RIDE MOMENTUM</div>
+        After the results announcement, retail enthusiasm drives the price toward the target. Hold through to AGM date for maximum capture.
+      </div>
+      <div class="stat-card p-4">
+        <div class="text-accent-red mb-2 font-semibold">PHASE 3 — EXIT & SWAP</div>
+        Sell into post-AGM strength before dividend exhaust. Use the Swap Calculator to immediately redeploy into the next cycle counter.
+      </div>
+    </div>
+  </section>
+
+  <footer class="text-center text-xs font-mono text-slate-700 pt-4 pb-2">
+    NSE Momentum Tracker · Prices via Yahoo Finance (RapidAPI fallback) · Not financial advice · <span id="footerDate"></span>
+  </footer>
+
+</main>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- ════════════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════════════ -->
+<script>
+/* ───────────────────────────────────────────────────────────
+   1. DATA STORE
+   To add a new stock: paste a new object into this array.
+   announcementMonth / agmMonth use JavaScript month numbers
+   (0 = Jan, 1 = Feb … 11 = Dec). Use arrays for multi-month
+   windows or a single number.
+─────────────────────────────────────────────────────────────*/
+const STOCKS = [
+  {
+    name:              "Williamson Tea",
+    ticker:            "WTK",
+    yahooTicker:       "WTK.NR",            // NSE Yahoo format
+    floorLow:          110.00,
+    floorHigh:         118.00,
+    target:            148.00,
+    announcement:      "Late June",
+    agm:               "August",
+    // Strategy timing: month number(s) for each phase
+    // 0=Jan … 11=Dec
+    buyMonths:         [4, 5],              // May–Jun accumulate
+    momentumMonths:    [5, 6],             // Jun–Jul momentum
+    exitMonths:        [7, 8],             // Aug–Sep exit
+  },
+  {
+    name:              "Kapchorua Tea",
+    ticker:            "KAPC",
+    yahooTicker:       "KAPC.NR",
+    floorLow:          240.00,
+    floorHigh:         255.00,
+    target:            320.00,
+    announcement:      "Late June",
+    agm:               "August",
+    buyMonths:         [4, 5],
+    momentumMonths:    [5, 6],
+    exitMonths:        [7, 8],
+  },
+  {
+    name:              "Centum",
+    ticker:            "CTUM",
+    yahooTicker:       "CTUM.NR",
+    floorLow:          12.50,
+    floorHigh:         13.20,
+    target:            16.75,
+    announcement:      "July 31",
+    agm:               "September 17",
+    buyMonths:         [5, 6],
+    momentumMonths:    [6, 7],
+    exitMonths:        [8, 9],
+  },
+  {
+    name:              "Car & General",
+    ticker:            "CGEN",
+    yahooTicker:       "CGEN.NR",
+    floorLow:          82.00,
+    floorHigh:         88.00,
+    target:            115.00,
+    announcement:      "Late April",
+    agm:               "Early June",
+    buyMonths:         [2, 3],
+    momentumMonths:    [3, 4],
+    exitMonths:        [5, 6],
+  },
+  {
+    name:              "Standard Chartered",
+    ticker:            "SCBK",
+    yahooTicker:       "SCBK.NR",
+    floorLow:          275.00,
+    floorHigh:         290.00,
+    target:            345.00,
+    announcement:      "Mid-March",
+    agm:               "Late April",
+    buyMonths:         [1, 2],
+    momentumMonths:    [2, 3],
+    exitMonths:        [3, 4],
+  },
+  {
+    name:              "Co-operative Bank",
+    ticker:            "COOP",
+    yahooTicker:       "COOP.NR",
+    floorLow:          12.50,
+    floorHigh:         13.00,
+    target:            15.80,
+    announcement:      "Mid-March",
+    agm:               "Late May",
+    buyMonths:         [1, 2],
+    momentumMonths:    [2, 3, 4],
+    exitMonths:        [4, 5],
+  },
+  {
+    name:              "Kakuzi Plc",
+    ticker:            "KUKZ",
+    yahooTicker:       "KUKZ.NR",
+    floorLow:          375.00,
+    floorHigh:         390.00,
+    target:            445.00,
+    announcement:      "Late March",
+    agm:               "Mid-May",
+    buyMonths:         [1, 2],
+    momentumMonths:    [2, 3, 4],
+    exitMonths:        [4, 5],
+  },
+  {
+    name:              "Crown Paints",
+    ticker:            "CRWN",
+    yahooTicker:       "CRWN.NR",
+    floorLow:          50.00,
+    floorHigh:         53.00,
+    target:            65.00,
+    announcement:      "Late May",
+    agm:               "Late June",
+    buyMonths:         [3, 4],
+    momentumMonths:    [4, 5],
+    exitMonths:        [5, 6],
+  },
+];
+
+/* ───────────────────────────────────────────────────────────
+   2. LIVE PRICE STORE
+─────────────────────────────────────────────────────────────*/
+const livePrices = {};   // ticker → { price, prev, change }
+
+/* ───────────────────────────────────────────────────────────
+   3. STATUS ENGINE
+─────────────────────────────────────────────────────────────*/
+const now   = new Date();
+const MONTH = now.getMonth();  // 0-based
+
+function getStatus(stock) {
+  if (stock.exitMonths.includes(MONTH))    return 'exit';
+  if (stock.momentumMonths.includes(MONTH))return 'momentum';
+  if (stock.buyMonths.includes(MONTH))     return 'buy';
+  return 'watch';
+}
+
+/* ───────────────────────────────────────────────────────────
+   4. PRICE API
+   Strategy: Try Yahoo Finance via a CORS proxy first.
+   On failure, seed with realistic mock prices so the UI
+   is always functional.
+─────────────────────────────────────────────────────────────*/
+const MOCK_PRICES = {
+  WTK:  { price: 113.50, prev: 111.00 },
+  KAPC: { price: 248.00, prev: 244.00 },
+  CTUM: { price: 12.90,  prev: 13.05  },
+  CGEN: { price: 85.50,  prev: 84.00  },
+  SCBK: { price: 282.00, prev: 278.50 },
+  COOP: { price: 12.75,  prev: 12.60  },
+  KUKZ: { price: 381.00, prev: 376.00 },
+  CRWN: { price: 51.50,  prev: 50.75  },
+};
+
+async function fetchPriceYahoo(stock) {
+  // Yahoo Finance v8 chart endpoint (no API key needed for basic quotes)
+  const symbol = encodeURIComponent(stock.yahooTicker);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`;
+  const res = await fetch(url, { mode: 'cors' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const meta = json?.chart?.result?.[0]?.meta;
+  if (!meta) throw new Error('No meta');
+  return {
+    price: meta.regularMarketPrice ?? meta.previousClose,
+    prev:  meta.chartPreviousClose ?? meta.previousClose,
+  };
+}
+
+async function fetchAllPrices() {
+  document.getElementById('lastUpdated').textContent = 'Updating…';
+  let successes = 0;
+
+  for (const stock of STOCKS) {
+    try {
+      const data = await fetchPriceYahoo(stock);
+      livePrices[stock.ticker] = {
+        price:  data.price,
+        prev:   data.prev,
+        change: ((data.price - data.prev) / data.prev) * 100,
+      };
+      successes++;
+    } catch (_) {
+      // Fall back to mock
+      const mock = MOCK_PRICES[stock.ticker] || { price: stock.floorLow, prev: stock.floorLow };
+      livePrices[stock.ticker] = {
+        price:  mock.price,
+        prev:   mock.prev,
+        change: ((mock.price - mock.prev) / mock.prev) * 100,
+        isMock: true,
+      };
+    }
+  }
+
+  const ts = new Date().toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit' });
+  const src = successes > 0 ? `Live · ${ts}` : `Simulated · ${ts}`;
+  document.getElementById('lastUpdated').textContent = src;
+
+  renderTable();
+  updateStats();
+  updateTicker();
+  populateCalculatorDropdowns();
+  runCalculator();
+}
+
+/* ───────────────────────────────────────────────────────────
+   5. TABLE RENDERER
+─────────────────────────────────────────────────────────────*/
+function fmt(n) {
+  return n != null ? n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+}
+
+function renderTable() {
+  const tbody = document.getElementById('stockTableBody');
+  tbody.innerHTML = '';
+
+  STOCKS.forEach(stock => {
+    const status   = getStatus(stock);
+    const lp       = livePrices[stock.ticker];
+    const price    = lp?.price;
+    const change   = lp?.change;
+    const isMock   = lp?.isMock;
+
+    // Upside calculation from current price
+    const upside = price
+      ? (((stock.target - price) / price) * 100).toFixed(1)
+      : (((stock.target - stock.floorHigh) / stock.floorHigh) * 100).toFixed(1);
+
+    // Progress bar: position within floor→target range
+    const pct = price
+      ? Math.min(100, Math.max(0, ((price - stock.floorLow) / (stock.target - stock.floorLow)) * 100))
+      : 0;
+
+    const badgeMap = {
+      buy:      { cls: 'badge-buy',      dot: '●', label: 'BUY ACCUMULATION' },
+      momentum: { cls: 'badge-momentum', dot: '▶', label: 'MOMENTUM RUN'    },
+      exit:     { cls: 'badge-exit',     dot: '◼', label: 'EXIT SIGNAL'     },
+      watch:    { cls: 'badge-watch',    dot: '○', label: 'WATCH'           },
+    };
+    const b = badgeMap[status];
+
+    const changeSign  = change >= 0 ? '+' : '';
+    const changeCls   = change > 0 ? 'price-up' : change < 0 ? 'price-down' : 'price-flat';
+    const priceLabel  = isMock ? `${fmt(price)}<sup class="text-slate-600 text-xs ml-0.5">~</sup>` : fmt(price);
+
+    // Progress bar color by status
+    const barColor = { buy:'#00e5a0', momentum:'#f5c842', exit:'#ff4d6d', watch:'#334155' }[status];
+
+    const tr = document.createElement('tr');
+    tr.className = 'stock-row border-b border-slate-800/50';
+    tr.innerHTML = `
+      <td class="px-4 py-3.5 font-medium text-slate-200">${stock.name}</td>
+      <td class="px-4 py-3.5">
+        <span class="font-mono text-xs px-2 py-0.5 rounded" style="background:#111e35;color:#38bdf8;">${stock.ticker}</span>
+      </td>
+      <td class="px-4 py-3.5 text-right font-mono text-xs text-slate-400">
+        ${fmt(stock.floorLow)} – ${fmt(stock.floorHigh)}
+      </td>
+      <td class="px-4 py-3.5 text-right">
+        <div class="price-pill ${changeCls}">${priceLabel}</div>
+        ${change != null ? `<div class="text-xs font-mono ${changeCls} mt-0.5">${changeSign}${change.toFixed(2)}%</div>` : ''}
+      </td>
+      <td class="px-4 py-3.5 text-right font-mono text-sm text-slate-200">${fmt(stock.target)}</td>
+      <td class="px-4 py-3.5 text-right">
+        <div class="text-sm font-mono text-accent-green">+${upside}%</div>
+        <div class="progress-track mt-1.5 w-16 ml-auto">
+          <div class="progress-fill" style="width:${pct}%;background:${barColor};"></div>
+        </div>
+      </td>
+      <td class="px-4 py-3.5 text-slate-400 text-xs">${stock.announcement}</td>
+      <td class="px-4 py-3.5 text-slate-400 text-xs">${stock.agm}</td>
+      <td class="px-4 py-3.5">
+        <span class="badge ${b.cls}">${b.dot} ${b.label}</span>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ───────────────────────────────────────────────────────────
+   6. STATS STRIP
+─────────────────────────────────────────────────────────────*/
+function updateStats() {
+  let buy=0, momentum=0, exit=0;
+  STOCKS.forEach(s => {
+    const st = getStatus(s);
+    if (st==='buy') buy++;
+    else if (st==='momentum') momentum++;
+    else if (st==='exit') exit++;
+  });
+  document.getElementById('statBuy').textContent      = buy;
+  document.getElementById('statMomentum').textContent = momentum;
+  document.getElementById('statExit').textContent     = exit;
+}
+
+/* ───────────────────────────────────────────────────────────
+   7. TICKER TAPE
+─────────────────────────────────────────────────────────────*/
+function updateTicker() {
+  const parts = STOCKS.map(s => {
+    const lp = livePrices[s.ticker];
+    const p  = lp ? fmt(lp.price) : '—';
+    const c  = lp ? ((lp.change>=0?'+':'')+lp.change.toFixed(2)+'%') : '';
+    return `${s.ticker} &nbsp;KES ${p} &nbsp;<span style="color:${lp?.change>=0?'#00e5a0':'#ff4d6d'}">${c}</span> &nbsp;&nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;&nbsp;`;
+  }).join('');
+  const doubled = parts + parts; // duplicate for seamless loop
+  document.getElementById('tickerContent').innerHTML = doubled;
+}
+
+/* ───────────────────────────────────────────────────────────
+   8. CALCULATOR
+─────────────────────────────────────────────────────────────*/
+const FRICTION = 0.042; // 4.2% round-trip (buy side baked in as sell-side deduction)
+
+function populateCalculatorDropdowns() {
+  const sellSel = document.getElementById('sellStock');
+  const buySel  = document.getElementById('buyStock');
+  const savedSell = sellSel.value;
+  const savedBuy  = buySel.value;
+
+  sellSel.innerHTML = '';
+  buySel.innerHTML  = '';
+
+  STOCKS.forEach((s, i) => {
+    const lp = livePrices[s.ticker];
+    const p  = lp ? ` (${fmt(lp.price)})` : '';
+    const o1 = new Option(`${s.name} [${s.ticker}]${p}`, s.ticker);
+    const o2 = new Option(`${s.name} [${s.ticker}]${p}`, s.ticker);
+    sellSel.add(o1);
+    buySel.add(o2);
+  });
+
+  // restore selections or set defaults
+  sellSel.value = savedSell || STOCKS[7].ticker; // CRWN
+  buySel.value  = savedBuy  || STOCKS[2].ticker; // CTUM
+
+  // seed prices from live data
+  prefillCalcPrices();
+}
+
+function prefillCalcPrices() {
+  const sellTicker = document.getElementById('sellStock').value;
+  const buyTicker  = document.getElementById('buyStock').value;
+
+  const sellLP = livePrices[sellTicker];
+  const buyLP  = livePrices[buyTicker];
+
+  const sellPriceInput = document.getElementById('sellPrice');
+  const buyPriceInput  = document.getElementById('buyPrice');
+
+  if (sellLP && !sellPriceInput.value) sellPriceInput.value = sellLP.price.toFixed(2);
+  if (buyLP  && !buyPriceInput.value)  buyPriceInput.value  = buyLP.price.toFixed(2);
+
+  updatePriceHints();
+  runCalculator();
+}
+
+function updatePriceHints() {
+  const sellTicker = document.getElementById('sellStock').value;
+  const buyTicker  = document.getElementById('buyStock').value;
+  const sellStock  = STOCKS.find(s=>s.ticker===sellTicker);
+  const buyStock   = STOCKS.find(s=>s.ticker===buyTicker);
+  const sellLP     = livePrices[sellTicker];
+  const buyLP      = livePrices[buyTicker];
+
+  document.getElementById('sellPriceHint').textContent =
+    sellLP ? `Live: KES ${fmt(sellLP.price)}  |  Floor: ${fmt(sellStock?.floorLow)}–${fmt(sellStock?.floorHigh)}` : '';
+  document.getElementById('buyPriceHint').textContent =
+    buyLP ? `Live: KES ${fmt(buyLP.price)}  |  Target: ${fmt(buyStock?.target)}` : '';
+}
+
+document.getElementById('sellStock').addEventListener('change', () => {
+  document.getElementById('sellPrice').value = '';
+  document.getElementById('buyPrice').value  = '';
+  prefillCalcPrices();
+});
+document.getElementById('buyStock').addEventListener('change', () => {
+  document.getElementById('buyPrice').value = '';
+  prefillCalcPrices();
+});
+
+function runCalculator() {
+  updatePriceHints();
+
+  const sellQty   = parseFloat(document.getElementById('sellQty').value)   || 0;
+  const sellPrice = parseFloat(document.getElementById('sellPrice').value) || 0;
+  const buyPrice  = parseFloat(document.getElementById('buyPrice').value)  || 0;
+  const buyTicker = document.getElementById('buyStock').value;
+  const buyStock  = STOCKS.find(s=>s.ticker===buyTicker);
+
+  const gross     = sellQty * sellPrice;
+  const friction  = gross * FRICTION;
+  const net       = gross - friction;
+  const shares    = buyPrice > 0 ? Math.floor(net / buyPrice) : 0;
+  const cost      = shares * buyPrice;
+  const targetVal = buyStock ? shares * buyStock.target : 0;
+  const gain      = targetVal - cost;
+  const gainPct   = cost > 0 ? (gain/cost*100) : 0;
+
+  // progress bar: % of net deployed
+  const utilised  = cost / (net || 1) * 100;
+
+  const fmtKES = n => 'KES ' + fmt(n);
+
+  document.getElementById('calcGross').textContent   = gross   > 0 ? fmtKES(gross)   : '—';
+  document.getElementById('calcFriction').textContent= friction> 0 ? `– ${fmtKES(friction)}` : '—';
+  document.getElementById('calcNet').textContent     = net     > 0 ? fmtKES(net)     : '—';
+  document.getElementById('calcShares').textContent  = shares  > 0 ? shares.toLocaleString() : '—';
+  document.getElementById('calcSharesLabel').textContent = buyStock ? `${buyStock.ticker} shares` : 'shares';
+  document.getElementById('calcCost').textContent    = cost    > 0 ? fmtKES(cost)    : '—';
+  document.getElementById('calcTargetVal').textContent = targetVal > 0 ? fmtKES(targetVal) : '—';
+  document.getElementById('calcGain').textContent    = gain    > 0 ? `+ ${fmtKES(gain)}`  : '—';
+  document.getElementById('calcGainPct').textContent = gainPct > 0
+    ? `+${gainPct.toFixed(1)}%`
+    : '—';
+  document.getElementById('calcGainPct').className = gainPct > 0 ? 'font-mono text-accent-green' : 'font-mono text-slate-500';
+  document.getElementById('calcProgress').style.width = `${Math.min(100, utilised)}%`;
+}
+
+/* ───────────────────────────────────────────────────────────
+   9. INIT
+─────────────────────────────────────────────────────────────*/
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), 3000);
+}
+
+(function init() {
+  // Date labels
+  const dateStr = now.toLocaleDateString('en-KE', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  document.getElementById('currentDateLabel').textContent = dateStr;
+  document.getElementById('footerDate').textContent = now.getFullYear();
+
+  // Seed calculator with mock data immediately so it's usable before fetch
+  STOCKS.forEach(s => {
+    if (!livePrices[s.ticker]) {
+      const m = MOCK_PRICES[s.ticker] || { price: s.floorLow, prev: s.floorLow };
+      livePrices[s.ticker] = { price: m.price, prev: m.prev, change: ((m.price-m.prev)/m.prev)*100, isMock: true };
+    }
+  });
+
+  renderTable();
+  updateStats();
+  updateTicker();
+  populateCalculatorDropdowns();
+
+  // Attempt live fetch (silent on network failure)
+  fetchAllPrices().catch(()=>{
+    document.getElementById('lastUpdated').textContent = 'Simulated prices';
+  });
+
+  // Auto-refresh every 5 minutes
+  setInterval(fetchAllPrices, 5 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
