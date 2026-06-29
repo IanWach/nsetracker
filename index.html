@@ -582,27 +582,15 @@ function showSetupBanner() {
 
 async function fetchAllPrices() {
   document.getElementById('lastUpdated').textContent = 'Updating…';
-  let successes = 0;
+    if (!SHEET_CSV_URL) {
+    applyPrices(FALLBACK_PRICES, true);
+    const ts = new Date().toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit' });
+    document.getElementById('lastUpdated').textContent = `Manual prices · ${ts}`;
+    renderTable(); updateStats(); updateTicker(); populateCalculatorDropdowns();
+    runCalculator();
+    showSetupBanner();
+    return;
 
-  for (const stock of STOCKS) {
-    try {
-      const data = await fetchPriceYahoo(stock);
-      livePrices[stock.ticker] = {
-        price:  data.price,
-        prev:   data.prev,
-        change: ((data.price - data.prev) / data.prev) * 100,
-      };
-      successes++;
-    } catch (_) {
-      // Fall back to mock
-      const mock = MOCK_PRICES[stock.ticker] || { price: stock.floorLow, prev: stock.floorLow };
-      livePrices[stock.ticker] = {
-        price:  mock.price,
-        prev:   mock.prev,
-        change: ((mock.price - mock.prev) / mock.prev) * 100,
-        isMock: true,
-      };
-    }
   }
 
   const ts = new Date().toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit' });
