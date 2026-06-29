@@ -593,9 +593,20 @@ async function fetchAllPrices() {
 
   }
 
-  const ts = new Date().toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit' });
-  const src = successes > 0 ? `Live · ${ts}` : `Simulated · ${ts}`;
-  document.getElementById('lastUpdated').textContent = src;
+   try {
+    const res  = await fetch(SHEET_CSV_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    const data = parseCSV(text);
+    applyPrices(data, false);
+    const ts = new Date().toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit' });
+    document.getElementById('lastUpdated').textContent = `Google Sheets · ${ts}`;
+  } catch (err) {
+    applyPrices(FALLBACK_PRICES, true);
+    const ts = new Date().toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit' });
+    document.getElementById('lastUpdated').textContent = `Sheet error — Manual prices · ${ts}`;
+    console.warn('Sheet fetch failed:', err.message);
+  }
 
   renderTable();
   updateStats();
