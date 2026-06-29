@@ -525,15 +525,22 @@ function getStatus(stock) {
    The app fetches fresh data every time it loads
    and every 5 minutes while open.
 ─────────────────────────────────────────────────────────────*/
-const MOCK_PRICES = {
-  WTK:  { price: 113.50, prev: 111.00 },
-  KAPC: { price: 248.00, prev: 244.00 },
-  CTUM: { price: 12.90,  prev: 13.05  },
-  CGEN: { price: 107.00,  prev: 105.00  },
-  SCBK: { price: 282.00, prev: 278.50 },
-  COOP: { price: 12.75,  prev: 12.60  },
-  KUKZ: { price: 381.00, prev: 376.00 },
-  CRWN: { price: 51.50,  prev: 50.75  },
+
+// ▼▼▼ PASTE YOUR GOOGLE SHEET CSV URL HERE ▼▼▼
+const SHEET_CSV_URL = '';
+// ▲▲▲ Leave empty to use manual fallback prices ▲▲▲
+
+// Fallback prices — edit these manually any time.
+// Used when no sheet URL is set, or if the fetch fails.
+const FALLBACK_PRICES = {
+  WTK:  { price: 158.75, prev: 150.25 },
+  KAPC: { price: 321.50, prev: 321.25 },
+  CTUM: { price: 14.20,  prev: 14.20  },
+  CGEN: { price: 115.00,  prev: 107.25  },
+  SCBK: { price: 321.00, prev: 334.75 },
+  COOP: { price: 34.45,  prev: 34.50  },
+  KUKZ: { price: 437.25, prev: 376.00 },
+  CRWN: { price: 65.5,  prev: 61.25  },
 };
 
 async function fetchPriceYahoo(stock) {
