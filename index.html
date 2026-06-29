@@ -837,23 +837,16 @@ function toast(msg) {
   document.getElementById('currentDateLabel').textContent = dateStr;
   document.getElementById('footerDate').textContent = now.getFullYear();
 
-  // Seed calculator with mock data immediately so it's usable before fetch
-  STOCKS.forEach(s => {
-    if (!livePrices[s.ticker]) {
-      const m = MOCK_PRICES[s.ticker] || { price: s.floorLow, prev: s.floorLow };
-      livePrices[s.ticker] = { price: m.price, prev: m.prev, change: ((m.price-m.prev)/m.prev)*100, isMock: true };
-    }
-  });
-
+  // Seed with fallback prices immediately so UI is usable on load
+  applyPrices(FALLBACK_PRICES, true);
   renderTable();
   updateStats();
   updateTicker();
   populateCalculatorDropdowns();
+  runCalculator();
 
-  // Attempt live fetch (silent on network failure)
-  fetchAllPrices().catch(()=>{
-    document.getElementById('lastUpdated').textContent = 'Simulated prices';
-  });
+  // Then fetch from Google Sheet (replaces fallback prices if sheet is set)
+  fetchAllPrices();
 
   // Auto-refresh every 5 minutes
   setInterval(fetchAllPrices, 5 * 60 * 1000);
