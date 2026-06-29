@@ -504,16 +504,32 @@ function getStatus(stock) {
 }
 
 /* ───────────────────────────────────────────────────────────
-   4. PRICE API
-   Strategy: Try Yahoo Finance via a CORS proxy first.
-   On failure, seed with realistic mock prices so the UI
-   is always functional.
+  4. PRICE SOURCE — Google Sheets CSV
+   ─────────────────────────────────────────────────────────
+   HOW TO SET UP (one-time, 2 minutes):
+
+   1. Go to sheets.google.com → create a new sheet
+   2. Set up columns exactly like this (Row 1 = header):
+         A1: TICKER   B1: PRICE   C1: PREV
+   3. Fill in your stocks below the header, e.g.:
+         A2: WTK      B2: 113.50  C2: 111.00
+         A3: KAPC     B3: 248.00  C3: 244.00
+         ... one row per stock ticker
+   4. File → Share → Publish to web
+      → Choose "Sheet1" and "Comma-separated values (.csv)"
+      → Click Publish → Copy the URL
+   5. Paste the URL below replacing the empty string
+
+   UPDATING PRICES:
+   Just edit numbers in the sheet and save.
+   The app fetches fresh data every time it loads
+   and every 5 minutes while open.
 ─────────────────────────────────────────────────────────────*/
 const MOCK_PRICES = {
   WTK:  { price: 113.50, prev: 111.00 },
   KAPC: { price: 248.00, prev: 244.00 },
   CTUM: { price: 12.90,  prev: 13.05  },
-  CGEN: { price: 85.50,  prev: 84.00  },
+  CGEN: { price: 107.00,  prev: 105.00  },
   SCBK: { price: 282.00, prev: 278.50 },
   COOP: { price: 12.75,  prev: 12.60  },
   KUKZ: { price: 381.00, prev: 376.00 },
